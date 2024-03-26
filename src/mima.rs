@@ -1,4 +1,3 @@
-use std::isize;
 use wasm_bindgen::prelude::*;
 
 const  MEMORY_SIZE: usize = 1048576;
@@ -8,6 +7,7 @@ const  VALUE_SIZE: usize = 16777216;
 pub struct Mima {
     akku: usize,
     iar: usize,
+    halt: bool,
     memory: [usize; MEMORY_SIZE]
 }
 
@@ -37,31 +37,67 @@ impl Mima {
     }
 
     pub fn step(&mut self) {
-        let instruction = self.memory[self.iar];
+        if self.halt {
+            return;
+        }
+        let command = Command::from_usize(self.memory[self.iar]);
+        if command.is_none() {
+            self.halt = true;
+            return;
+        }
+        let command = command.unwrap();
+        match command.instruction {
+            _ => todo!() 
+        }
     }
 }
 
 #[wasm_bindgen]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Instruction {
    LDC,
    LDV,
    STV,
-   LDIV,
-   STIV,
    ADD,
    AND,
    OR,
    XOR,
-   NOT,
-   RAR,
    EQL,
    JMP,
-   JNN,
+   JMN,
+   LDIV,
+   STIV, 
+   NOT,
+   RAR, 
    HLT
 }
 
+impl Instruction {
+    pub fn from_opcode(opcode: usize) -> Option<Instruction> {
+        match opcode {
+            0 => Some(Instruction::LDC),
+            1 => Some(Instruction::LDV),
+            2 => Some(Instruction::STV),
+            3 => Some(Instruction::ADD),
+            4 => Some(Instruction::AND),
+            5 => Some(Instruction::OR),
+            6 => Some(Instruction::XOR),
+            7 => Some(Instruction::EQL),
+            8 => Some(Instruction::JMP),
+            9 => Some(Instruction::JMN),
+            10 => Some(Instruction::LDIV),
+            11 => Some(Instruction::STIV),
+            240 => Some(Instruction::HLT),
+            241 => Some(Instruction::NOT),
+            242 => Some(Instruction::RAR),
+            _ => None
+        }
+    }
+}
+
+
 #[wasm_bindgen]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Command{
     pub instruction: Instruction,
     pub value: usize,
@@ -73,13 +109,27 @@ impl Command {
         if value > VALUE_SIZE {
             None
         } else {
-            let opcode: Vec<usize> = (0..4).map(|n| (value >> n) & 1).collect();
-            let argument: Vec<usize> = (4..24).map(|n| (value >> n) & 1).collect();
-            dbg!(opcode);
-            dbg!(argument);
-            match opcode {
-                _ => None
-            }
+            // Convert the 4 most significant bits into opcode
+            let opcode: usize = (20..24).map(|n| (value >> n) & 1).rev().fold(0, |acc, elem| elem * (2 as usize).pow(acc as u32));
+            // Convert the 20 least significant bits into argument
+            let value: usize = (0..20).map(|n| (value >> n) & 1).rev().fold(0, |acc, elem| elem * (2 as usize).pow(acc as u32));
+            Instruction::from_opcode(opcode).map(|instruction| Command { instruction, value })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::mima::{Command, Instruction};
+
+
+    #[test]
+    fn command_loading() {
+        //TODO: Expand tests
+        let testcode = 0b000100000000000000000001;
+        dbg!(testcode);
+        let cmd = Command::from_usize(testcode);
+
+        assert_eq!(cmd, Some(Command {instruction: Instruction::LDV, value: 1}));
     }
 }
