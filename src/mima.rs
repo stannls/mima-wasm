@@ -2,6 +2,7 @@ use wasm_bindgen::prelude::*;
 
 const  MEMORY_SIZE: usize = 1048576;
 const  VALUE_SIZE: usize = 16777216;
+const MINUS_ONE: usize = 0b100000000000000000000000;
 
 #[wasm_bindgen]
 pub struct Mima {
@@ -41,13 +42,32 @@ impl Mima {
             return;
         }
         let command = Command::from_usize(self.memory[self.iar]);
-        if command.is_none() {
+        if command.is_none() || command.as_ref().unwrap().value >= MEMORY_SIZE {
             self.halt = true;
             return;
         }
         let command = command.unwrap();
+        let mut next_instruction = self.iar + 1;
         match command.instruction {
-            _ => todo!() 
+            Instruction::LDC => self.akku = command.value,
+            Instruction::LDV => self.akku = self.memory[command.value],
+            Instruction::STV => self.memory[command.value] = self.akku,
+            // TODO: Overflow checking
+            Instruction::ADD => self.akku += self.memory[command.value],
+            Instruction::AND => self.akku &= self.memory[command.value],
+            Instruction::OR => self.akku |= self.memory[command.value],
+            Instruction::XOR => self.akku ^= self.memory[command.value],
+            Instruction::EQL => self.akku = if self.akku == self.memory[command.value] {MINUS_ONE} else {0},
+            Instruction::JMP => next_instruction = command.value,
+            Instruction::JMN => if self.akku >= MINUS_ONE {next_instruction = command.value},
+            Instruction::LDIV => self.akku = self.memory[self.memory[command.value]],
+            Instruction::STIV => self.memory[self.memory[command.value]] = self.akku,
+            Instruction::HLT => self.halt = true,
+            Instruction::NOT => self.akku = !self.akku,
+            Instruction::RAR => self.akku = self.akku.rotate_right(1),
+        }
+        if !self.halt {
+            self.iar = next_instruction;
         }
     }
 }
