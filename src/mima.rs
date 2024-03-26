@@ -73,6 +73,15 @@ impl Mima {
     pub fn new() -> Mima {
         Mima { akku: 0, iar: 0, halt: false, memory: [0; MEMORY_SIZE] }
     }
+    pub fn load(&mut self, program: Vec<Command>) -> bool {
+        if program.len() >= MEMORY_SIZE {
+            return false;
+        }
+        for i in 0..program.len() {
+            self.memory[i] = program[i].to_usize();
+        }
+        true
+    }
 }
 
 #[wasm_bindgen]
