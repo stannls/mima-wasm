@@ -70,6 +70,9 @@ impl Mima {
             self.iar = next_instruction;
         }
     }
+    pub fn new() -> Mima {
+        Mima { akku: 0, iar: 0, halt: false, memory: [0; MEMORY_SIZE] }
+    }
 }
 
 #[wasm_bindgen]
@@ -113,6 +116,25 @@ impl Instruction {
             _ => None
         }
     }
+    pub fn to_opcode(&self) -> usize {
+        match self {
+            Instruction::LDC => 0,
+            Instruction::LDV => 1,
+            Instruction::STV => 2,
+            Instruction::ADD => 3,
+            Instruction::AND => 4,
+            Instruction::OR => 5,
+            Instruction::XOR => 6,
+            Instruction::EQL => 7,
+            Instruction::JMP => 8,
+            Instruction::JMN => 9,
+            Instruction::LDIV => 10,
+            Instruction::STIV => 11,
+            Instruction::HLT => 240,
+            Instruction::NOT => 241,
+            Instruction::RAR => 242
+        }
+    }
 }
 
 
@@ -130,11 +152,19 @@ impl Command {
             None
         } else {
             // Convert the 4 most significant bits into opcode
-            let opcode: usize = (20..24).map(|n| (value >> n) & 1).rev().fold(0, |acc, elem| elem * (2 as usize).pow(acc as u32));
+            let opcode: usize = (20..24).map(|n| (value >> n) & 1).enumerate().fold(0, |acc, (index, elem)| acc + elem * (2 as usize).pow(index as u32));
+            dbg!(opcode);
             // Convert the 20 least significant bits into argument
-            let value: usize = (0..20).map(|n| (value >> n) & 1).rev().fold(0, |acc, elem| elem * (2 as usize).pow(acc as u32));
+            let value: usize = (0..20).map(|n| (value >> n) & 1).enumerate().fold(0, |acc, (index, elem)| acc + elem * (2 as usize).pow(index as u32));
+            dbg!(value);
             Instruction::from_opcode(opcode).map(|instruction| Command { instruction, value })
         }
+    }
+    pub fn to_usize(&self) -> usize {
+       let opcode = self.instruction.to_opcode(); 
+       let opcode_bytes = (0..4).map(|n| (opcode >> n) & 1).rev();
+       let value_bytes = (0..20).map(|n| (self.value >> n) & 1).rev();
+       opcode_bytes.chain(value_bytes).rev().enumerate().fold(0, |acc, (index, elem)| acc + elem * (2 as usize).pow(index as u32))
     }
 }
 
@@ -147,9 +177,16 @@ mod tests {
     fn command_loading() {
         //TODO: Expand tests
         let testcode = 0b000100000000000000000001;
-        dbg!(testcode);
         let cmd = Command::from_usize(testcode);
 
         assert_eq!(cmd, Some(Command {instruction: Instruction::LDV, value: 1}));
+    }
+
+    #[test]
+    fn command_dumping() { 
+        let testcode = 0b000100000000000000000001;
+        let cmd = Command{instruction: Instruction::LDV, value: 1};
+
+        assert_eq!(cmd.to_usize(), testcode);
     }
 }
