@@ -11,7 +11,7 @@ pub struct Mima {
     akku: usize,
     iar: usize,
     halt: bool,
-    memory: [usize; MEMORY_SIZE],
+    memory: Vec<usize>,
 }
 
 #[wasm_bindgen]
@@ -27,7 +27,7 @@ impl Mima {
         self.akku = 0;
         self.iar = 0;
         self.halt = false;
-        self.memory = [0; MEMORY_SIZE];
+        self.memory = vec![0; MEMORY_SIZE];
     }
     pub fn write_adress(&mut self, adress: usize, value: usize) -> bool {
         if adress >= MEMORY_SIZE || value >= VALUE_SIZE {
@@ -47,7 +47,7 @@ impl Mima {
     }
 
     pub fn memdump(&mut self) -> Vec<usize> {
-        Vec::from(self.memory)
+        self.memory.to_owned()
     }
 
     pub fn step(&mut self) {
@@ -84,7 +84,10 @@ impl Mima {
                 }
             }
             Instruction::LDIV => self.akku = self.memory[self.memory[command.value]],
-            Instruction::STIV => self.memory[self.memory[command.value]] = self.akku,
+            Instruction::STIV => {
+                let adress = self.memory[command.value];
+                self.memory[adress] = self.akku;
+            },
             Instruction::HALT => self.halt = true,
             Instruction::NOT => self.akku = !self.akku,
             Instruction::RAR => self.akku = self.akku.rotate_right(1),
@@ -103,7 +106,7 @@ impl Mima {
             akku: 0,
             iar: 0,
             halt: false,
-            memory: [0; MEMORY_SIZE],
+            memory: vec![0; MEMORY_SIZE],
         }
     }
     pub fn load(&mut self, program: CompilerOutput) -> bool {
@@ -165,7 +168,7 @@ impl Instruction {
             9 => Some(Instruction::JMN),
             10 => Some(Instruction::LDIV),
             11 => Some(Instruction::STIV),
-            240 => Some(Instruction::HALT),
+            15 => Some(Instruction::HALT),
             241 => Some(Instruction::NOT),
             242 => Some(Instruction::RAR),
             _ => None,
@@ -205,7 +208,7 @@ impl Instruction {
             Instruction::JMN => 9,
             Instruction::LDIV => 10,
             Instruction::STIV => 11,
-            Instruction::HALT => 240,
+            Instruction::HALT => 15,
             Instruction::NOT => 241,
             Instruction::RAR => 242,
         }
@@ -232,7 +235,6 @@ impl Command {
                 .fold(0, |acc, (index, elem)| {
                     acc + elem * (2 as usize).pow(index as u32)
                 });
-            dbg!(opcode);
             // Convert the 20 least significant bits into argument
             let value: usize = (0..20)
                 .map(|n| (value >> n) & 1)
@@ -240,7 +242,6 @@ impl Command {
                 .fold(0, |acc, (index, elem)| {
                     acc + elem * (2 as usize).pow(index as u32)
                 });
-            dbg!(value);
             Instruction::from_opcode(opcode).map(|instruction| Command { instruction, value })
         }
     }
