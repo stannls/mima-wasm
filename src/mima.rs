@@ -114,6 +114,9 @@ impl Mima {
             halt: self.halt,
         }
     }
+    pub fn get_next_instruction(&self) -> Option<Command> {
+        Command::from_usize(self.memory[self.iar])
+    }
 }
 
 #[wasm_bindgen]
