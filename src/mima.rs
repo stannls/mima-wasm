@@ -1,7 +1,7 @@
 use wasm_bindgen::prelude::*;
 
-const  MEMORY_SIZE: usize = 1048576;
-const  VALUE_SIZE: usize = 16777216;
+const MEMORY_SIZE: usize = 1048576;
+const VALUE_SIZE: usize = 16777216;
 const MINUS_ONE: usize = 0b100000000000000000000000;
 
 #[wasm_bindgen]
@@ -9,7 +9,7 @@ pub struct Mima {
     akku: usize,
     iar: usize,
     halt: bool,
-    memory: [usize; MEMORY_SIZE]
+    memory: [usize; MEMORY_SIZE],
 }
 
 #[wasm_bindgen]
@@ -18,7 +18,6 @@ pub struct MimaDebug {
     pub iar: usize,
     pub halt: bool,
 }
-
 
 #[wasm_bindgen]
 impl Mima {
@@ -29,7 +28,6 @@ impl Mima {
             self.memory[adress] = value;
             true
         }
-
     }
 
     pub fn read_adress(&mut self, adress: usize) -> Option<usize> {
@@ -64,9 +62,19 @@ impl Mima {
             Instruction::AND => self.akku &= self.memory[command.value],
             Instruction::OR => self.akku |= self.memory[command.value],
             Instruction::XOR => self.akku ^= self.memory[command.value],
-            Instruction::EQL => self.akku = if self.akku == self.memory[command.value] {MINUS_ONE} else {0},
+            Instruction::EQL => {
+                self.akku = if self.akku == self.memory[command.value] {
+                    MINUS_ONE
+                } else {
+                    0
+                }
+            }
             Instruction::JMP => next_instruction = command.value,
-            Instruction::JMN => if self.akku >= MINUS_ONE {next_instruction = command.value},
+            Instruction::JMN => {
+                if self.akku >= MINUS_ONE {
+                    next_instruction = command.value
+                }
+            }
             Instruction::LDIV => self.akku = self.memory[self.memory[command.value]],
             Instruction::STIV => self.memory[self.memory[command.value]] = self.akku,
             Instruction::HLT => self.halt = true,
@@ -83,7 +91,12 @@ impl Mima {
         }
     }
     pub fn new() -> Mima {
-        Mima { akku: 0, iar: 0, halt: false, memory: [0; MEMORY_SIZE] }
+        Mima {
+            akku: 0,
+            iar: 0,
+            halt: false,
+            memory: [0; MEMORY_SIZE],
+        }
     }
     pub fn load(&mut self, program: Vec<Command>) -> bool {
         if program.len() >= MEMORY_SIZE {
@@ -95,28 +108,32 @@ impl Mima {
         true
     }
     pub fn get_debug(&self) -> MimaDebug {
-        MimaDebug { akku: self.akku, iar: self.iar, halt: self.halt }
+        MimaDebug {
+            akku: self.akku,
+            iar: self.iar,
+            halt: self.halt,
+        }
     }
 }
 
 #[wasm_bindgen]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Instruction {
-   LDC,
-   LDV,
-   STV,
-   ADD,
-   AND,
-   OR,
-   XOR,
-   EQL,
-   JMP,
-   JMN,
-   LDIV,
-   STIV, 
-   NOT,
-   RAR, 
-   HLT
+    LDC,
+    LDV,
+    STV,
+    ADD,
+    AND,
+    OR,
+    XOR,
+    EQL,
+    JMP,
+    JMN,
+    LDIV,
+    STIV,
+    NOT,
+    RAR,
+    HLT,
 }
 
 impl Instruction {
@@ -137,7 +154,7 @@ impl Instruction {
             240 => Some(Instruction::HLT),
             241 => Some(Instruction::NOT),
             242 => Some(Instruction::RAR),
-            _ => None
+            _ => None,
         }
     }
     pub fn to_opcode(&self) -> usize {
@@ -156,15 +173,14 @@ impl Instruction {
             Instruction::STIV => 11,
             Instruction::HLT => 240,
             Instruction::NOT => 241,
-            Instruction::RAR => 242
+            Instruction::RAR => 242,
         }
     }
 }
 
-
 #[wasm_bindgen]
 #[derive(Clone, Debug, PartialEq)]
-pub struct Command{
+pub struct Command {
     pub instruction: Instruction,
     pub value: usize,
 }
@@ -176,19 +192,35 @@ impl Command {
             None
         } else {
             // Convert the 4 most significant bits into opcode
-            let opcode: usize = (20..24).map(|n| (value >> n) & 1).enumerate().fold(0, |acc, (index, elem)| acc + elem * (2 as usize).pow(index as u32));
+            let opcode: usize = (20..24)
+                .map(|n| (value >> n) & 1)
+                .enumerate()
+                .fold(0, |acc, (index, elem)| {
+                    acc + elem * (2 as usize).pow(index as u32)
+                });
             dbg!(opcode);
             // Convert the 20 least significant bits into argument
-            let value: usize = (0..20).map(|n| (value >> n) & 1).enumerate().fold(0, |acc, (index, elem)| acc + elem * (2 as usize).pow(index as u32));
+            let value: usize = (0..20)
+                .map(|n| (value >> n) & 1)
+                .enumerate()
+                .fold(0, |acc, (index, elem)| {
+                    acc + elem * (2 as usize).pow(index as u32)
+                });
             dbg!(value);
             Instruction::from_opcode(opcode).map(|instruction| Command { instruction, value })
         }
     }
     pub fn to_usize(&self) -> usize {
-       let opcode = self.instruction.to_opcode(); 
-       let opcode_bytes = (0..4).map(|n| (opcode >> n) & 1).rev();
-       let value_bytes = (0..20).map(|n| (self.value >> n) & 1).rev();
-       opcode_bytes.chain(value_bytes).rev().enumerate().fold(0, |acc, (index, elem)| acc + elem * (2 as usize).pow(index as u32))
+        let opcode = self.instruction.to_opcode();
+        let opcode_bytes = (0..4).map(|n| (opcode >> n) & 1).rev();
+        let value_bytes = (0..20).map(|n| (self.value >> n) & 1).rev();
+        opcode_bytes
+            .chain(value_bytes)
+            .rev()
+            .enumerate()
+            .fold(0, |acc, (index, elem)| {
+                acc + elem * (2 as usize).pow(index as u32)
+            })
     }
 }
 
@@ -196,20 +228,28 @@ impl Command {
 mod tests {
     use crate::mima::{Command, Instruction};
 
-
     #[test]
     fn command_loading() {
         //TODO: Expand tests
         let testcode = 0b000100000000000000000001;
         let cmd = Command::from_usize(testcode);
 
-        assert_eq!(cmd, Some(Command {instruction: Instruction::LDV, value: 1}));
+        assert_eq!(
+            cmd,
+            Some(Command {
+                instruction: Instruction::LDV,
+                value: 1
+            })
+        );
     }
 
     #[test]
-    fn command_dumping() { 
+    fn command_dumping() {
         let testcode = 0b000100000000000000000001;
-        let cmd = Command{instruction: Instruction::LDV, value: 1};
+        let cmd = Command {
+            instruction: Instruction::LDV,
+            value: 1,
+        };
 
         assert_eq!(cmd.to_usize(), testcode);
     }
