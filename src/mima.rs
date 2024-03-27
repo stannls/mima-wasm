@@ -12,6 +12,13 @@ pub struct Mima {
     memory: [usize; MEMORY_SIZE]
 }
 
+#[wasm_bindgen]
+pub struct MimaDebug {
+    pub akku: usize,
+    pub iar: usize,
+    pub halt: bool,
+}
+
 
 #[wasm_bindgen]
 impl Mima {
@@ -70,6 +77,11 @@ impl Mima {
             self.iar = next_instruction;
         }
     }
+    pub fn run(&mut self) {
+        while !self.halt {
+            self.step();
+        }
+    }
     pub fn new() -> Mima {
         Mima { akku: 0, iar: 0, halt: false, memory: [0; MEMORY_SIZE] }
     }
@@ -81,6 +93,9 @@ impl Mima {
             self.memory[i] = program[i].to_usize();
         }
         true
+    }
+    pub fn get_debug(&self) -> MimaDebug {
+        MimaDebug { akku: self.akku, iar: self.iar, halt: self.halt }
     }
 }
 
