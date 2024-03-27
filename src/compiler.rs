@@ -28,6 +28,9 @@ impl CompilerOutput {
    pub fn get_start_adress(&self) -> usize {
         self.start_adress.to_owned()
    }
+   pub fn new(mima_code: Vec<usize>, start_adress: usize) -> CompilerOutput {
+        CompilerOutput { mima_code, start_adress }
+   }
 }
 
 

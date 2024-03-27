@@ -23,6 +23,12 @@ pub struct MimaDebug {
 
 #[wasm_bindgen]
 impl Mima {
+    pub fn reset(&mut self) {
+        self.akku = 0;
+        self.iar = 0;
+        self.halt = false;
+        self.memory = [0; MEMORY_SIZE];
+    }
     pub fn write_adress(&mut self, adress: usize, value: usize) -> bool {
         if adress >= MEMORY_SIZE || value >= VALUE_SIZE {
             false
@@ -101,6 +107,7 @@ impl Mima {
         }
     }
     pub fn load(&mut self, program: CompilerOutput) -> bool {
+        self.reset();
         let code = program.get_mima_code();
         if code.len() >= MEMORY_SIZE {
             return false;
@@ -253,7 +260,9 @@ impl Command {
 
 #[cfg(test)]
 mod tests {
-    use crate::mima::{Command, Instruction};
+    use crate::{compiler::CompilerOutput, mima::{Command, Instruction}};
+
+    use super::Mima;
 
     #[test]
     fn command_loading() {
@@ -279,5 +288,22 @@ mod tests {
         };
 
         assert_eq!(cmd.to_usize(), testcode);
+    }
+    #[test]
+    fn mima_add_program() {
+        let ldv = Command {instruction: crate::mima::Instruction::LDV, value: 0};
+        let add = Command {instruction: crate::mima::Instruction::ADD, value: 1};
+        let stv = Command {instruction: crate::mima::Instruction::STV, value: 2};
+        let halt = Command {instruction: crate::mima::Instruction::HALT, value: 0};
+        let mima_code = vec![22, 20, 0, ldv.to_usize(), add.to_usize(), stv.to_usize(), halt.to_usize()];
+        let compiler_output = CompilerOutput::new(mima_code, 3);
+
+        let mut mima = Mima::new();
+        mima.load(compiler_output);
+        mima.run();
+        assert_eq!(mima.halt, true);
+        assert_eq!(mima.akku, 42);
+        assert_eq!(mima.iar, 6);
+        assert_eq!(mima.read_adress(2), Some(42));
     }
 }
