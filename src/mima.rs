@@ -1,5 +1,7 @@
 use wasm_bindgen::prelude::*;
 
+use crate::compiler::CompilerOutput;
+
 const MEMORY_SIZE: usize = 1048576;
 const VALUE_SIZE: usize = 16777216;
 const MINUS_ONE: usize = 0b100000000000000000000000;
@@ -77,7 +79,7 @@ impl Mima {
             }
             Instruction::LDIV => self.akku = self.memory[self.memory[command.value]],
             Instruction::STIV => self.memory[self.memory[command.value]] = self.akku,
-            Instruction::HLT => self.halt = true,
+            Instruction::HALT => self.halt = true,
             Instruction::NOT => self.akku = !self.akku,
             Instruction::RAR => self.akku = self.akku.rotate_right(1),
         }
@@ -98,13 +100,15 @@ impl Mima {
             memory: [0; MEMORY_SIZE],
         }
     }
-    pub fn load(&mut self, program: Vec<Command>) -> bool {
-        if program.len() >= MEMORY_SIZE {
+    pub fn load(&mut self, program: CompilerOutput) -> bool {
+        let code = program.get_mima_code();
+        if code.len() >= MEMORY_SIZE {
             return false;
         }
-        for i in 0..program.len() {
-            self.memory[i] = program[i].to_usize();
+        for i in 0..code.len() {
+            self.memory[i] = code[i];
         }
+        self.iar = program.get_start_adress();
         true
     }
     pub fn get_debug(&self) -> MimaDebug {
@@ -136,7 +140,7 @@ pub enum Instruction {
     STIV,
     NOT,
     RAR,
-    HLT,
+    HALT,
 }
 
 impl Instruction {
@@ -154,10 +158,30 @@ impl Instruction {
             9 => Some(Instruction::JMN),
             10 => Some(Instruction::LDIV),
             11 => Some(Instruction::STIV),
-            240 => Some(Instruction::HLT),
+            240 => Some(Instruction::HALT),
             241 => Some(Instruction::NOT),
             242 => Some(Instruction::RAR),
             _ => None,
+        }
+    }
+    pub fn from_string(string: &str) -> Option<Instruction> {
+        match string {
+            "LDC" => Some(Self::LDC),
+            "LDV" => Some(Self::LDV),
+            "STV" => Some(Self::STV),
+            "ADD" => Some(Self::ADD),
+            "AND" => Some(Self::AND),
+            "OR" => Some(Self::OR),
+            "XOR" => Some(Self::XOR),
+            "EQL" => Some(Self::EQL),
+            "JMP" => Some(Self::JMP),
+            "JMN" => Some(Self::JMN),
+            "LDIV" => Some(Self::LDIV),
+            "STIV" => Some(Self::STIV),
+            "HALT" => Some(Self::HALT),
+            "NOT" => Some(Self::NOT),
+            "RAR" => Some(Self::RAR),
+            _ => None
         }
     }
     pub fn to_opcode(&self) -> usize {
@@ -174,7 +198,7 @@ impl Instruction {
             Instruction::JMN => 9,
             Instruction::LDIV => 10,
             Instruction::STIV => 11,
-            Instruction::HLT => 240,
+            Instruction::HALT => 240,
             Instruction::NOT => 241,
             Instruction::RAR => 242,
         }
