@@ -1,5 +1,4 @@
 use regex::Regex;
-use std::rc::Rc;
 use lazy_static::lazy_static;
 
 use wasm_bindgen::prelude::*;
@@ -8,9 +7,8 @@ use crate::mima::Instruction;
 use crate::mima::Command;
 
 lazy_static! {
-    static ref variable_regex: Regex = Regex::new(r"([a-zA-Z])+: DS( ([0-9]+))?").unwrap();
-    static ref label_regex: Regex = Regex::new(r"([a-zA-Z])+:").unwrap();
-    static ref instruction_regex: Regex = Regex::new(r"(([a-zA-Z])+)( (([0-9]+)|([a-zA-Z])+))?").unwrap();
+    static ref VARIABLE_REGEX: Regex = Regex::new(r"([a-zA-Z])+: DS( ([0-9]+))?").unwrap();
+    static ref INSTRUCTION_REGEX: Regex = Regex::new(r"\s*(([a-zA-Z]):)?\s*(([a-zA-Z])+)( (([0-9]+)|([a-zA-Z])+))?").unwrap();
 }
 
 // Struct reprasantation of the compiler output
@@ -45,15 +43,15 @@ pub fn compile(input: &str) -> Option<CompilerOutput> {
     let mut commands: Vec<Cmd> = vec![];
     let lines: Vec<&str> = input.split("\n").filter(|line| !line.starts_with(";")).filter(|line| !line.is_empty()).collect();
     for line in lines {
-        if variable_regex.is_match(line) {
-            let captures = variable_regex.captures(line).unwrap();
+        if VARIABLE_REGEX.is_match(line) {
+            let captures = VARIABLE_REGEX.captures(line).unwrap();
             let name = captures.get(1).unwrap().as_str();
             let value = captures.get(3).map(|f| f.as_str().parse::<usize>().ok()).flatten();
             variables.push(Variable { name: name.to_string(), value })
-        }  else if instruction_regex.is_match(line) {
-            let captures = instruction_regex.captures(line).unwrap();
-            let name = captures.get(1).unwrap().as_str();
-            let value = captures.get(4);
+        }  else if INSTRUCTION_REGEX.is_match(line) {
+            let captures = INSTRUCTION_REGEX.captures(line).unwrap();
+            let name = captures.get(3).unwrap().as_str();
+            let value = captures.get(6);
             let param = match value {
                 Some(value) => match value.as_str().parse::<usize>() {
                     Ok(number) => Param::Fixed(number),
