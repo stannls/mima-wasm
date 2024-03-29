@@ -168,7 +168,7 @@ impl Instruction {
             9 => Some(Instruction::JMN),
             10 => Some(Instruction::LDIV),
             11 => Some(Instruction::STIV),
-            15 => Some(Instruction::HALT),
+            240 => Some(Instruction::HALT),
             241 => Some(Instruction::NOT),
             242 => Some(Instruction::RAR),
             _ => None,
@@ -208,7 +208,7 @@ impl Instruction {
             Instruction::JMN => 9,
             Instruction::LDIV => 10,
             Instruction::STIV => 11,
-            Instruction::HALT => 15,
+            Instruction::HALT => 240,
             Instruction::NOT => 241,
             Instruction::RAR => 242,
         }
@@ -224,33 +224,55 @@ pub struct Command {
 
 #[wasm_bindgen]
 impl Command {
-    pub fn from_usize(value: usize) -> Option<Command> {
-        if value > VALUE_SIZE {
+    pub fn from_usize(v: usize) -> Option<Command> {
+        if v > VALUE_SIZE {
             None
         } else {
             // Convert the 4 most significant bits into opcode
-            let opcode: usize = (20..24)
-                .map(|n| (value >> n) & 1)
+            let mut opcode: usize = (20..24)
+                .map(|n| (v >> n) & 1)
                 .enumerate()
                 .fold(0, |acc, (index, elem)| {
                     acc + elem * (2 as usize).pow(index as u32)
                 });
             // Convert the 20 least significant bits into argument
-            let value: usize = (0..20)
-                .map(|n| (value >> n) & 1)
+            let mut value: usize = (0..20)
+                .map(|n| (v >> n) & 1)
                 .enumerate()
                 .fold(0, |acc, (index, elem)| {
                     acc + elem * (2 as usize).pow(index as u32)
                 });
+            // Check if we are dealing with 8 bit opcodes
+            if opcode == 0b1111 {
+                opcode = (16..24)
+                .map(|n| (v >> n) & 1)
+                .enumerate()
+                .fold(0, |acc, (index, elem)| {
+                    acc + elem * (2 as usize).pow(index as u32)
+                });
+                dbg!(opcode);
+                value = (0..16)
+                .map(|n| (v >> n) & 1)
+                .enumerate()
+                .fold(0, |acc, (index, elem)| {
+                    acc + elem * (2 as usize).pow(index as u32)
+                });
+            }
             Instruction::from_opcode(opcode).map(|instruction| Command { instruction, value })
         }
     }
     pub fn to_usize(&self) -> usize {
         let opcode = self.instruction.to_opcode();
-        let opcode_bytes = (0..4).map(|n| (opcode >> n) & 1).rev();
-        let value_bytes = (0..20).map(|n| (self.value >> n) & 1).rev();
+        let mut opcode_bytes: Vec<usize> = (0..4).map(|n| (opcode >> n) & 1).rev().collect();
+        let mut value_bytes: Vec<usize> = (0..20).map(|n| (self.value >> n) & 1).rev().collect();
+        // Check for 8bit opcode
+        if opcode >= 240 {
+            opcode_bytes = (0..8).map(|n| (opcode >> n) & 1).rev().collect();
+            value_bytes = (0..16).map(|n| (self.value >> n) & 1).rev().collect();
+        }
         opcode_bytes
-            .chain(value_bytes)
+            .iter()
+            .chain(value_bytes.iter())
             .rev()
             .enumerate()
             .fold(0, |acc, (index, elem)| {
@@ -289,6 +311,16 @@ mod tests {
         };
 
         assert_eq!(cmd.to_usize(), testcode);
+    }
+    #[test]
+    fn long_opcodes() {
+        let halt_code = 0b111100000000000000000001;
+        let cmd = Command {
+            instruction: Instruction::HALT,
+            value: 1,
+        };
+        assert_eq!(Command::from_usize(halt_code).unwrap(), cmd);
+        assert_eq!(cmd.to_usize(), halt_code);
     }
     #[test]
     fn mima_add_program() {
