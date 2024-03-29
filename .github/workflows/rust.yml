@@ -11,6 +11,10 @@ env:
 
 jobs:
   build:
+    strategy:
+      matrix:
+        toolchain:
+          - nightly
 
     runs-on: ubuntu-latest
 
