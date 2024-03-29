@@ -283,7 +283,7 @@ impl Command {
 
 #[cfg(test)]
 mod tests {
-    use crate::{compiler::CompilerOutput, mima::{Command, Instruction}};
+    use crate::{compiler::{compile, CompilerOutput}, mima::{Command, Instruction}};
 
     use super::Mima;
 
@@ -338,5 +338,30 @@ mod tests {
         assert_eq!(mima.akku, 42);
         assert_eq!(mima.iar, 6);
         assert_eq!(mima.read_adress(2), Some(42));
+    }
+    #[test]
+    fn mima_loop_program() {
+        // A simple loop program that counts to 100
+        let assembly_source = "one: DS 1
+max: DS 100
+counter: DS
+START: LDV one
+STV counter
+LOOP: LDV counter
+ADD one
+STV counter
+LDV max
+EQL counter
+JMN FINISH
+JMP LOOP
+FINISH: HALT
+";
+        let output = compile(assembly_source).unwrap();
+        let mut mima = Mima::new();
+        mima.load(output);
+        mima.run();
+        assert_eq!(mima.halt, true);
+        // Check if the program counted to 100 at the given adress.
+        assert_eq!(mima.read_adress(2), Some(100));
     }
 }
