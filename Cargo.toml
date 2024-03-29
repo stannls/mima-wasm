@@ -5,6 +5,7 @@ edition = "2021"
 authors = ["Yannis Storrer"]
 license = "GPL-3.0"
 description = "Web Assembly API for the MIMA Cpu."
+repo = "https://github.com/stannls/mima-wasm"
 
 [lib]
 crate-type = ["cdylib"]
