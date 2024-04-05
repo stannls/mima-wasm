@@ -32,6 +32,12 @@ impl CompilerOutput {
    }
 }
 
+// Struct representing the step between parsing and generating assembly code
+struct ParsedProgram {
+    pub variables: Vec<Variable>,
+    pub commands: Vec<Cmd>,
+}
+
 
 /*
  * This is a very basic compiler. That is currently wip.
@@ -39,6 +45,12 @@ impl CompilerOutput {
  */
 #[wasm_bindgen]
 pub fn compile(input: &str) -> Option<CompilerOutput> {
+    let parsed = parse_assembly(input)?;
+    generate_machinecode(&parsed)
+    
+}
+
+fn parse_assembly(input: &str) -> Option<ParsedProgram> {
     let mut variables: Vec<Variable> = vec![];
     let mut commands: Vec<Cmd> = vec![];
     let lines: Vec<&str> = input.split("\n").filter(|line| !line.starts_with(";")).filter(|line| !line.is_empty()).collect();
@@ -65,21 +77,25 @@ pub fn compile(input: &str) -> Option<CompilerOutput> {
             return None;
         }
     }
+    Some(ParsedProgram { variables, commands })
+}
+
+fn generate_machinecode(parsed: &ParsedProgram) -> Option<CompilerOutput> {
     let mut compiled = vec![];
-    for var in variables.to_owned() {
+    for var in parsed.variables.to_owned() {
         compiled.push(var.value.unwrap_or(0));
     }
-    let first_instruction = variables.len();
-    for cmd in commands.to_owned() {
+    let first_instruction = parsed.variables.len();
+    for cmd in parsed.commands.to_owned() {
         let command = match cmd.param {
             Param::Fixed(value) => Command{instruction: cmd.instruction, value},
             // TODO: Checking if this is valid and eventually throw an error.
             Param::None => Command { instruction: cmd.instruction, value: 0 },
             Param::Reference(name) => {
-                let resolved_var = resolve_variable(&variables, &name);
+                let resolved_var = resolve_variable(&parsed.variables, &name);
                 if resolved_var.is_none() && (cmd.instruction == Instruction::JMP || cmd.instruction == Instruction::JMN) {
                     // TODO: Forbid variable referencing in jumps
-                    let resolved_label = resolve_label(&commands, &name)? + variables.len();
+                    let resolved_label = resolve_label(&parsed.commands, &name)? + parsed.variables.len();
                     Command { instruction: cmd.instruction, value: resolved_label}
                 } else if resolved_var.is_some() {
                     Command{ instruction: cmd.instruction, value: resolved_var?}
