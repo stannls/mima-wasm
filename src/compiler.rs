@@ -1,5 +1,6 @@
 use lazy_static::lazy_static;
 use regex::Regex;
+use snafu::prelude::*;
 
 use wasm_bindgen::prelude::*;
 
@@ -35,21 +36,37 @@ impl CompilerOutput {
     }
 }
 
+#[derive(Debug, Snafu)]
+pub enum CompilerError {
+    #[snafu(display("Invalid instruction in line '{line}'."))]
+    InvalidLine{line: usize},
+    #[snafu(display("Invalid reference in line '{line}'"))]
+    InvalidReference{line: usize},
+    #[snafu(display("Couldn't find variable '{name}'"))]
+    UnknownVariable{name: String},
+    #[snafu(display("Couldn't find label '{name}'"))]
+    UnknownLabel{name: String},
+    #[snafu(display("Couldn't parse instruction: '{name}'."))]
+    UnknownInstruction{name: String},
+}
+
 pub mod compiler {
     use wasm_bindgen::prelude::*;
     use crate::compiler::{CompilerOutput, VARIABLE_REGEX, INSTRUCTION_REGEX, Instruction,};
     use crate::mima::Command;
+
+    use super::CompilerError;
     /*
      * This is a very basic compiler. That is currently wip.
      * For now it only supports basic variable assignments and instructions.
      */
     #[wasm_bindgen]
-    pub fn compile(input: &str) -> Option<CompilerOutput> {
-        let parsed = parse_assembly(input)?;
-        generate_machinecode(&parsed)
+    pub fn compile(input: &str) -> Result<CompilerOutput, String> {
+        let parsed = parse_assembly(input).map_err(|err| err.to_string())?;
+        generate_machinecode(&parsed).map_err(|err| err.to_string())
     }
 
-    fn parse_assembly(input: &str) -> Option<ParsedProgram> {
+    fn parse_assembly(input: &str) -> Result<ParsedProgram, CompilerError> {
         let mut variables: Vec<Variable> = vec![];
         let mut commands: Vec<Cmd> = vec![];
         let lines: Vec<&str> = input
@@ -57,7 +74,7 @@ pub mod compiler {
             .filter(|line| !line.starts_with(";"))
             .filter(|line| !line.is_empty())
             .collect();
-        for line in lines {
+        for line in lines.to_owned() {
             if VARIABLE_REGEX.is_match(line) {
                 let captures = VARIABLE_REGEX.captures(line).unwrap();
                 let name = captures.get(1).unwrap().as_str();
@@ -82,28 +99,28 @@ pub mod compiler {
                     None => Param::None,
                 };
                 commands.push(Cmd {
-                    instruction: Instruction::from_string(name)?,
+                    instruction: Instruction::from_string(name).ok_or(CompilerError::UnknownInstruction { name: name.to_string() })?,
                     param,
                     label,
                 });
             } else {
-                return None;
+                return Err(CompilerError::InvalidLine { line: lines.iter().position(|&r| r == line).unwrap() });
             }
         }
-        Some(ParsedProgram {
+        Ok(ParsedProgram {
             variables,
             commands,
         })
     }
 
-    fn generate_machinecode(parsed: &ParsedProgram) -> Option<CompilerOutput> {
+    fn generate_machinecode(parsed: &ParsedProgram) -> Result<CompilerOutput, CompilerError> {
         let mut compiled = vec![];
         for var in parsed.variables.to_owned() {
             compiled.push(var.value.unwrap_or(0));
         }
         let first_instruction = parsed.variables.len();
         for cmd in parsed.commands.to_owned() {
-            let command = match cmd.param {
+            let command = match cmd.to_owned().param {
                 Param::Fixed(value) => Command {
                     instruction: cmd.instruction,
                     value,
@@ -115,7 +132,7 @@ pub mod compiler {
                 },
                 Param::Reference(name) => {
                     let resolved_var = resolve_variable(&parsed.variables, &name);
-                    if resolved_var.is_none()
+                    if resolved_var.is_err()
                         && (cmd.instruction == Instruction::JMP
                             || cmd.instruction == Instruction::JMN)
                     {
@@ -126,19 +143,19 @@ pub mod compiler {
                             instruction: cmd.instruction,
                             value: resolved_label,
                         }
-                    } else if resolved_var.is_some() {
+                    } else if resolved_var.is_ok() {
                         Command {
                             instruction: cmd.instruction,
                             value: resolved_var?,
                         }
                     } else {
-                        return None;
+                        return Err(CompilerError::InvalidReference { line: parsed.commands.to_owned().iter().position(|r| *r == cmd).unwrap() });
                     }
                 }
             };
             compiled.push(command.to_usize());
         }
-        Some(CompilerOutput {
+        Ok(CompilerOutput {
             mima_code: compiled,
             start_adress: first_instruction,
         })
@@ -148,26 +165,26 @@ pub mod compiler {
      * This function resolves variable references. The variables are placed in the first n adresses, so
      * the resolving is simply determining the position in the var array.
      */
-    fn resolve_variable(variables: &Vec<Variable>, reference: &str) -> Option<usize> {
+    fn resolve_variable(variables: &Vec<Variable>, reference: &str) -> Result<usize, CompilerError> {
         let mut memory_position = 0 as usize;
         for var in variables {
             if var.name == *reference {
-                return Some(memory_position);
+                return Ok(memory_position);
             }
             memory_position += 1;
         }
-        return None;
+        return Err(CompilerError::UnknownVariable { name: reference.to_string() });
     }
 
-    fn resolve_label(commands: &Vec<Cmd>, label: &str) -> Option<usize> {
+    fn resolve_label(commands: &Vec<Cmd>, label: &str) -> Result<usize, CompilerError> {
         let mut memory_position = 0 as usize;
         for cmd in commands {
             if cmd.label.is_some() && cmd.label.to_owned().unwrap() == label {
-                return Some(memory_position);
+                return Ok(memory_position);
             }
             memory_position += 1;
         }
-        return None;
+        return Err(CompilerError::UnknownLabel { name: label.to_string() });
     }
     // Struct representing the step between parsing and generating assembly code
     #[derive(Clone, Debug)]
@@ -181,13 +198,13 @@ pub mod compiler {
         pub value: Option<usize>,
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, PartialEq)]
     struct Cmd {
         pub instruction: Instruction,
         pub param: Param,
         pub label: Option<String>,
     }
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, PartialEq)]
     enum Param {
         Fixed(usize),
         Reference(String),
@@ -238,7 +255,7 @@ c: DS";
             halt.to_usize(),
         ];
         let compiled = compiler::compile(assembly_source);
-        assert_eq!(compiled.is_some(), true);
+        assert_eq!(compiled.is_ok(), true);
         let compiled = compiled.unwrap();
         assert_eq!(compiled.get_mima_code(), mima_code);
         assert_eq!(compiled.get_start_adress(), 3);
@@ -317,7 +334,7 @@ FINISH: HALT
             .to_usize(),
         ];
         let compiled = compiler::compile(assembly_source);
-        assert_eq!(compiled.is_some(), true);
+        assert_eq!(compiled.is_ok(), true);
         let compiled = compiled.unwrap();
         assert_eq!(compiled.get_mima_code(), mima_code);
         assert_eq!(compiled.get_start_adress(), 3);
