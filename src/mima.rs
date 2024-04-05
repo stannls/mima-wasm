@@ -283,7 +283,7 @@ impl Command {
 
 #[cfg(test)]
 mod tests {
-    use crate::{compiler::{compile, CompilerOutput}, mima::{Command, Instruction}};
+    use crate::{compiler::{compiler, CompilerOutput}, mima::{Command, Instruction}};
 
     use super::Mima;
 
@@ -356,7 +356,7 @@ JMN FINISH
 JMP LOOP
 FINISH: HALT
 ";
-        let output = compile(assembly_source).unwrap();
+        let output = compiler::compile(assembly_source).unwrap();
         let mut mima = Mima::new();
         mima.load(output);
         mima.run();
